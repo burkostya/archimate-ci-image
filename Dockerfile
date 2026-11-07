@@ -37,19 +37,20 @@ RUN set -eux; \
 ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
 FROM base AS archi
-ARG ARCHI_VERSION=5.7.0
+ARG ARCHI_VERSION=5.10.0
+ARG ARCHI_RELEASE_TAG=5.10
 
 # Download & extract Archimate tool
 RUN set -eux; \
     curl -fsSL --retry 3 -o archi.tgz \
-      "https://github.com/archimatetool/archi.io/releases/download/$ARCHI_VERSION/Archi-Linux64-$ARCHI_VERSION.tgz"; \
+      "https://github.com/archimatetool/archi.io/releases/download/$ARCHI_RELEASE_TAG/Archi-Linux64-$ARCHI_VERSION.tgz"; \
     tar zxf archi.tgz -C /opt/; \
     rm archi.tgz; \
     chmod +x /opt/Archi/Archi; \
     mkdir -p /root/.archi/dropins /archi/report /archi/project
 
 FROM archi AS coarchi
-ARG COARCHI_VERSION=0.9.4
+ARG COARCHI_VERSION=0.9.8
 
 # Download & extract Archimate coArchi plugin
 RUN set -eux; \
@@ -59,6 +60,8 @@ RUN set -eux; \
     rm coarchi.zip
 
 FROM coarchi
+
+LABEL org.opencontainers.image.source="https://github.com/burkostya/archimate-ci-image"
 
 COPY entrypoint.sh /opt/Archi/
 ENTRYPOINT [ "/opt/Archi/entrypoint.sh" ]

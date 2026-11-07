@@ -1,2 +1,5 @@
 /report
 .env
+
+/test-results
+__pycache__

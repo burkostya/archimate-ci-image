@@ -1,5 +1,5 @@
-ARG ARCHIMATE_CI_IMAGE=ghcr.io/woozymasta/archimate-ci-image
-ARG ARCHIMATE_CI_VERSION=5.7.0-1.0.6
+ARG ARCHIMATE_CI_IMAGE=ghcr.io/burkostya/archimate-ci-image
+ARG ARCHIMATE_CI_VERSION=5.10.0-1.0.7
 
 FROM $ARCHIMATE_CI_IMAGE:$ARCHIMATE_CI_VERSION AS base
 
@@ -13,4 +13,5 @@ RUN set -eux; \
     chown -R "$UID:0" /archi; \
     chmod -R g+rw /archi
 
+ENV HOME=/archi
 USER $UID

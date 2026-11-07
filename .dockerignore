@@ -9,3 +9,6 @@ CHANGELOG.md
 CONTRIBUTING.md
 CNAME
 LICENSE
+
+/test-results
+__pycache__

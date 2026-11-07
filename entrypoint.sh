@@ -37,27 +37,28 @@ export GIT_SSH_COMMAND GIT_TERMINAL_PROMPT
 # Run Archi
 archi_run() {
   local -a _args=()
+  local -a _dirs=()
 
   # Html report
   [ "${ARCHI_HTML_REPORT_ENABLED,,}" == true ] &&
     _args+=(
       --html.createReport
         "${ARCHI_HTML_REPORT_PATH:=$ARCHI_REPORT_PATH/html}"
-    )
+    ) && _dirs+=("$ARCHI_HTML_REPORT_PATH")
 
   # CSV report
   [ "${ARCHI_CSV_REPORT_ENABLED,,}" == true ] &&
     _args+=(
       --csv.export
         "${ARCHI_CSV_REPORT_PATH:=$ARCHI_REPORT_PATH/csv}"
-    )
+    ) && _dirs+=("$ARCHI_CSV_REPORT_PATH")
 
   # Export model
   [ "${ARCHI_EXPORT_MODEL_ENABLED,,}" == true ] &&
     _args+=(
       --saveModel
         "${ARCHI_EXPORT_MODEL_PATH:=$ARCHI_REPORT_PATH}/$_project.archimate"
-    )
+    ) && _dirs+=("$ARCHI_EXPORT_MODEL_PATH")
 
   # Jasper report
   [ "${ARCHI_JASPER_REPORT_ENABLED,,}" == true ] &&
@@ -70,7 +71,15 @@ archi_run() {
         "$_project"
       --jasper.title
         "${ARCHI_JASPER_REPORT_TITLE:=$_project}"
-    )
+    ) && _dirs+=("$ARCHI_JASPER_REPORT_PATH")
+
+  # Some Archi exporters only log an unwritable destination and return success.
+  # Create destinations here so filesystem errors fail the container first.
+  local _dir
+  for _dir in "${_dirs[@]}"; do
+    mkdir -p "$_dir"
+    [ -w "$_dir" ] || fail "Report directory is not writable: $_dir"
+  done
 
   if [ -n "$ARCHI_EXTRA_ARGS" ]; then
     # shellcheck disable=SC2206  # we want word-splitting into array
@@ -79,8 +88,8 @@ archi_run() {
 
   # Run Archi
   dbus-run-session -- xvfb-run -a \
-    /opt/Archi/Archi -application "$ARCHI_APP" -consoleLog -nosplash \
-      --modelrepository.loadModel "$ARCHI_PROJECT_PATH" "${_args[@]}" &&
+    /opt/Archi/Archi --launcher.suppressErrors -application "$ARCHI_APP" -consoleLog -nosplash \
+      --abortOnException --modelrepository.loadModel "$ARCHI_PROJECT_PATH" "${_args[@]}" &&
   printf '\n%s\n\n' "Done. Reports saved to $ARCHI_REPORT_PATH"
 }
 
@@ -93,7 +102,9 @@ re_match() {
 
 # Encode url symbols
 urlencode() {
-  local LC_COLLATE=C length="${#1}"
+  # Percent encoding operates on UTF-8 bytes, including non-ASCII model names.
+  local LC_ALL=C
+  local length="${#1}"
   for ((i = 0; i < length; i++)); do
     local c="${1:$i:1}"
     case $c in
@@ -117,32 +128,36 @@ insert_nav_right() {
   ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
 }
 
+# Link to exports even when they are outside the HTML report directory.
+report_link() {
+  local html="$1" target="$2" label="$3" relative href
+  relative="$(realpath -m --relative-to="$(dirname "$html")" "$target")"
+  href="$(urlencode "$relative")"
+  href="${href//%2F/\/}"
+  grep -q ">${label}<" "$html" || \
+    insert_nav_right "$html" "<li><a href=\"$href\" class=\"go\">$label</a></li>"
+}
+
 update_html() {
   local html_root="${ARCHI_HTML_REPORT_PATH:-$ARCHI_REPORT_PATH/html}"
   local html="$html_root/index.html"
 
-  [ ! -f "$html" ] && return
+  [ -f "$html" ] || return 0
 
   if [ "${ARCHI_CSV_REPORT_ENABLED,,}" == true ]; then
     for item in {elements,properties,relations}; do
-      _li="<li><a href=\"${item}.csv\" class=\"go\">${item^}</a></li>"
-      grep -q ">${item^}<" "$html" || \
-        insert_nav_right "$html" "$_li"
+      report_link "$html" "${ARCHI_CSV_REPORT_PATH:-$ARCHI_REPORT_PATH/csv}/${item}.csv" "${item^}"
     done
   fi
 
   if [ "${ARCHI_JASPER_REPORT_ENABLED,,}" == true ]; then
     for item in ${ARCHI_JASPER_REPORT_FORMATS//,/ }; do
-      _li="<li><a href=\"$_project.${item,,}\" class=\"go\">${item^^}</a></li>"
-      grep -q ">${item^^}<" "$html" || \
-        insert_nav_right "$html" "$_li"
+      report_link "$html" "${ARCHI_JASPER_REPORT_PATH:-$ARCHI_REPORT_PATH/jasper}/$_project.${item,,}" "${item^^}"
     done
   fi
 
   if [ "${ARCHI_EXPORT_MODEL_ENABLED,,}" == true ]; then
-    _li="<li><a href=\"$_project.archimate\" class=\"go\">Model</a></li>"
-    grep -q '>Model<' "$html" || \
-      insert_nav_right "$html" "$_li"
+    report_link "$html" "${ARCHI_EXPORT_MODEL_PATH:-$ARCHI_REPORT_PATH}/$_project.archimate" Model
   fi
 }
 
@@ -189,8 +204,8 @@ is_http_repo() { [[ "$1" =~ ^https?://.+\.git$ ]]; }
 # Run custom archi command
 if [ "$#" -ge 1 ]; then
   smsg "Execute Archi with _args: $*"
-  xvfb-run \
-    /opt/Archi/Archi -application "$ARCHI_APP" -consoleLog -nosplash "$@"
+  dbus-run-session -- xvfb-run -a \
+    /opt/Archi/Archi --launcher.suppressErrors -application "$ARCHI_APP" -consoleLog -nosplash --abortOnException "$@"
   exit 0
 fi
 
@@ -218,7 +233,7 @@ if [ "${GITHUB_ACTIONS:-}" == true ]; then
 
   [ "${DEBUG:-false}" != true ] && set +x;
   GITHUB_TOKEN="$(urlencode "${GITHUB_TOKEN:?Token not specified}")"
-  [ "${DEBUG:-false}" != true ] && set -x
+  [ "${DEBUG:-false}" = true ] && set -x
 
   # Create repository url with token
   # _gh_repo="${GITHUB_SERVER_URL//:\/\/*}://"                       # Protocol
@@ -267,7 +282,7 @@ if [ "${GITHUB_ACTIONS:-}" == true ]; then
   )"
   [ -n "$_subtree" ] || fail "git subtree split returned empty sha"
 
-  git push origin "$_subtree:$GITHUB_PAGES_BRANCH" --force
+  git push origin "$_subtree:refs/heads/$GITHUB_PAGES_BRANCH" --force
 
   exit 0
 
@@ -361,13 +376,6 @@ else
     'directory.'
 fi
 
-
-if [ "$#" -ge 1 ]; then
-  smsg "Execute Archi with _args: $*"
-  dbus-run-session -- xvfb-run -a \
-    /opt/Archi/Archi -application "$ARCHI_APP" -consoleLog -nosplash "$@"
-  exit 0
-fi
 
 # Make report
 archi_run

@@ -41,15 +41,16 @@ for cloning.
 
 ## Container image
 
-You can pull image from registries:
+This fork packages **Archi 5.10.0** and **coArchi 0.9.8** for `linux/amd64`.
+It is maintained independently of [WoozyMasta/archimate-ci-image](https://github.com/WoozyMasta/archimate-ci-image).
 
-* `ghcr.io/woozymasta/archimate-ci-image:5.7.0-1.0.6`
-* `docker.io/woozymasta/archimate-ci-image:5.7.0-1.0.6`
+You can pull the image from GitHub Container Registry:
+
+* `ghcr.io/burkostya/archimate-ci-image:5.10.0-1.0.7`
 
 And rootless image:
 
-* `ghcr.io/woozymasta/archimate-ci-image:5.7.0-1.0.6-rootless`
-* `docker.io/woozymasta/archimate-ci-image:5.7.0-1.0.6-rootless`
+* `ghcr.io/burkostya/archimate-ci-image:5.10.0-1.0.7-rootless`
 
 ## Run Container
 
@@ -66,7 +67,7 @@ docker run --rm -ti \
   -e ARCHI_JASPER_REPORT_ENABLED=false \
   -e ARCHI_CSV_REPORT_ENABLED=true \
   -e ARCHI_EXPORT_MODEL_ENABLED=true \
-  ghcr.io/woozymasta/archimate-ci-image:5.7.0-1.0.6
+  ghcr.io/burkostya/archimate-ci-image:5.10.0-1.0.7
 ```
 
 An example with handling a local repository:
@@ -79,13 +80,13 @@ chmod o+rw ./report
 docker run --rm -ti \
   -v $(pwd):/archi/project \
   -v $(pwd)/report:/archi/report \
-  ghcr.io/woozymasta/archimate-ci-image:5.7.0-1.0.6
+  ghcr.io/burkostya/archimate-ci-image:5.10.0-1.0.7
 ```
 
 Working with the CLI directly:
 
 ```bash
-docker run --rm -ti ghcr.io/woozymasta/archimate-ci-image:5.7.0-1.0.6 --help
+docker run --rm -ti ghcr.io/burkostya/archimate-ci-image:5.10.0-1.0.7 --help
 ```
 
 Example on how to write preferences:
@@ -138,6 +139,7 @@ Options for managing model export:
   format.
 * **`ARCHI_EXPORT_MODEL_PATH`**=`$ARCHI_REPORT_PATH` - Path for save model;
 * **`ARCHI_APP`**=`com.archimatetool.commandline.app` application name.
+* **`ARCHI_EXTRA_ARGS`** - Additional CLI arguments, split on whitespace; use environment variables for paths containing spaces.
 * **`DEBUG`**=`false` - enable `bash -x`
 
 ### GitHub Actions Configuration
@@ -182,11 +184,11 @@ jobs:
     name: Deploy Archi report HTML to GitHub Pages
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v7.0.1
 
       - name: Deploy Archi report
         id: archi
-        uses: WoozyMasta/archimate-ci-image@5.7.0-1.0.6
+        uses: burkostya/archimate-ci-image@5.10.0-1.0.7
         with:
           archiHtmlReportEnabled: true
           archiJasperReportEnabled: true
@@ -210,7 +212,7 @@ Add a configuration like this to your `./.gitlab-ci.yml` file:
 pages:
   stage: build
   image:
-    name: ghcr.io/woozymasta/archimate-ci-image:5.7.0-1.0.6
+    name: ghcr.io/burkostya/archimate-ci-image:5.10.0-1.0.7
     entrypoint: [""]
 
   script:
@@ -241,22 +243,60 @@ and all report paths are automatically set to `$CI_PROJECT_DIR/public`
 ## Build Container
 
 ```bash
-ARCHI_VERSION=5.0.2
-COARCHI_VERSION=0.8.7
+ARCHI_VERSION=5.10.0
+ARCHI_RELEASE_TAG=5.10
+COARCHI_VERSION=0.9.8
 
 docker build \
   --tag "archimate-ci-image:$ARCHI_VERSION-dev" \
   --build-arg="ARCHI_VERSION=$ARCHI_VERSION" \
+  --build-arg="ARCHI_RELEASE_TAG=$ARCHI_RELEASE_TAG" \
   --build-arg="COARCHI_VERSION=$COARCHI_VERSION" \
   ./
 
 docker build \
   --file Dockerfile.rootless \
   --tag "archimate-ci-image:$ARCHI_VERSION-dev-rootless" \
-  --build-arg="ARCHIMATE_CI_IMAGE=archimate-ci" \
+  --build-arg="ARCHIMATE_CI_IMAGE=archimate-ci-image" \
   --build-arg="ARCHIMATE_CI_VERSION=$ARCHI_VERSION-dev" \
   ./
 ```
+
+## Verify and release this fork
+
+Run the same builds and integration checks as CI (Docker and Python 3 required):
+
+```bash
+scripts/build-test.sh
+```
+
+Use a fresh `TEST_OUTPUT` directory for each run. Logs and generated reports are
+saved under `test-results/` by default. Tests use an included coArchi model,
+exercise both images, and publish Pages only to a temporary local Git remote.
+Rootless bind mounts must be writable by UID 1000 (or the UID selected at build).
+
+`VERSION` records the container release. Before tagging, keep it aligned with
+`action.yml`, `Dockerfile.rootless`, and the Archi version in `Dockerfile`:
+
+```bash
+python3 scripts/check-release.py 5.10.0-1.0.7
+```
+
+After merging a verified change, push the matching version tag to trigger the
+release workflow. It tests both images before publishing the same built images
+to GHCR; Docker Hub credentials are not needed. Versioned tags are never reused.
+
+On the first release GHCR may create a private package. The workflow first pushes
+`candidate-<commit>` images and stops before assigning release tags if the package
+is private. Set the package visibility to **Public** in
+[package settings](https://github.com/users/burkostya/packages/container/archimate-ci-image/settings),
+then rerun the workflow. GitHub does not offer a package visibility write API.
+After anonymous access is verified, the workflow updates `latest` and
+`latest-rootless` and creates a GitHub Release with image digests.
+
+Consumers should pin versioned image or Action tags. To roll back, use the
+previous upstream release `ghcr.io/woozymasta/archimate-ci-image:5.7.0-1.0.6`
+or `WoozyMasta/archimate-ci-image@5.7.0-1.0.6`. Model repositories are not migrated.
 
 ## Solving Potential Problems
 
@@ -270,7 +310,7 @@ podman run --rm -ti \
   -v $(pwd)/report:/archi/report \
   -e GIT_REPOSITORY=https://github.com/WoozyMasta/archimate-ci-image-example.git \
   -e ARCHI_JASPER_REPORT_ENABLED=false \
-  ghcr.io/woozymasta/archimate-ci-image:5.7.0-1.0.6
+  ghcr.io/burkostya/archimate-ci-image:5.10.0-1.0.7
 ```
 
 ---
@@ -285,7 +325,7 @@ docker run --rm -ti \
   -e GIT_REPOSITORY=https://github.com/WoozyMasta/archimate-ci-image-example.git
   --network=host
   --add-host="$(getent hosts gitlab.internal.tld | awk '{print $2 ":" $1}')"
-  ghcr.io/woozymasta/archimate-ci-image:5.7.0-1.0.6
+  ghcr.io/burkostya/archimate-ci-image:5.10.0-1.0.7
 ```
 
 <!-- links -->

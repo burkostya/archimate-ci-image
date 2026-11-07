@@ -1,0 +1,25 @@
+name: Verify images
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Build and test both images
+        run: scripts/build-test.sh
+      - name: Preserve reports and logs
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: verification-${{ github.sha }}
+          path: test-results/
+          include-hidden-files: true

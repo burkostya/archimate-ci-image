@@ -1,0 +1,3 @@
+<archimate:ApplicationComponent xmlns:archimate="http://www.archimatetool.com/archimate" name="Приложение" id="ci-app" documentation="Тестовая документация">
+  <properties key="owner" value="Команда"/>
+</archimate:ApplicationComponent>

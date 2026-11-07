@@ -1,0 +1,4 @@
+<archimate:RealizationRelationship xmlns:archimate="http://www.archimatetool.com/archimate" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="ci-relation">
+  <source xsi:type="archimate:ApplicationComponent" href="ApplicationComponent_ci-app.xml#ci-app"/>
+  <target xsi:type="archimate:ApplicationService" href="ApplicationService_ci-service.xml#ci-service"/>
+</archimate:RealizationRelationship>
