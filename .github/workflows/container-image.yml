@@ -1,88 +1,49 @@
-name: Create Release
+name: Release images
 on:
   push:
-    tags:
-      - "*.**"
+    tags: ['*.*.*-*.*.*']
+
+permissions:
+  contents: read
+
+# Avoid overlapping writes to the mutable latest tags.
+concurrency:
+  group: ghcr-release
+  cancel-in-progress: false
 
 jobs:
-  build_and_push:
-    name: Build and push container image
+  release:
+    if: github.repository == 'burkostya/archimate-ci-image'
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     permissions:
       packages: write
       contents: write
+    env:
+      TEST_IMAGE: ghcr.io/burkostya/archimate-ci-image
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Check out the repo
-        uses: actions/checkout@v2
-
-      - name: Set env
-        id: env
-        shell: bash
-        run: |
-          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-      - name: Log in to GitHub Container registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v2
+      - uses: actions/checkout@v7.0.1
+      - name: Validate release version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 scripts/check-release.py "$RELEASE_TAG"
+      - name: Refuse to overwrite an existing release
+        run: scripts/publish.sh preflight
+      - name: Build and test both images
+        run: scripts/build-test.sh
+      - name: Log in to GHCR
+        uses: docker/login-action@v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Log in to Docker Hub Container registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v2
+      - name: Publish tested images and release
+        run: scripts/publish.sh publish
+      - name: Preserve reports and logs
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and push container image
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ghcr.io/woozymasta/archimate-ci-image:${{ steps.env.outputs.tag }}
-            ghcr.io/woozymasta/archimate-ci-image:latest
-            docker.io/woozymasta/archimate-ci-image:${{ steps.env.outputs.tag }}
-            docker.io/woozymasta/archimate-ci-image:latest
-
-      - name: Build and push rootless container image
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: ./Dockerfile.rootless
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ghcr.io/woozymasta/archimate-ci-image:${{ steps.env.outputs.tag }}-rootless
-            ghcr.io/woozymasta/archimate-ci-image:latest-rootless
-            docker.io/woozymasta/archimate-ci-image:${{ steps.env.outputs.tag }}-rootless
-            docker.io/woozymasta/archimate-ci-image:latest-rootless
-          build-args: |
-            ARCHIMATE_CI_VERSION=${{ steps.env.outputs.tag }}
-
-      - name: Create Release
-        id: create_release
-        uses: ncipollo/release-action@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          body: |
-            GitHub Action [Deploy Archi Report ${{ steps.env.outputs.tag }}](https://github.com/marketplace/actions/deploy-archi-report?version=${{ steps.env.outputs.tag }})
-
-            Container images:
-
-            woozymasta/archimate-ci-image:**${{ steps.env.outputs.tag }}**
-
-            * `docker pull ghcr.io/woozymasta/archimate-ci-image:${{ steps.env.outputs.tag }}`
-            * `docker pull docker.io/woozymasta/archimate-ci-image:${{ steps.env.outputs.tag }}`
-
-            woozymasta/archimate-ci-image:**${{ steps.env.outputs.tag }}-rootless**
-
-            * `docker pull ghcr.io/woozymasta/archimate-ci-image:${{ steps.env.outputs.tag }}-rootless`
-            * `docker pull docker.io/woozymasta/archimate-ci-image:${{ steps.env.outputs.tag }}-rootless`
-
-            > [Changelog](https://github.com/${{ github.repository }}/blob/master/CHANGELOG.md)
-
-          draft: false
-          prerelease: false
+          name: release-${{ github.ref_name }}
+          path: test-results/
+          include-hidden-files: true

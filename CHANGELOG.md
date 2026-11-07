@@ -7,6 +7,27 @@ itself. For example `4.9.1-1.0.1`
 
 ## [Unreleased]
 
+## [5.10.0-1.0.7] - Unreleased
+
+### Changed
+
+* Upgrade Archi to `5.10.0` and coArchi to `0.9.8`.
+* Publish this fork to `ghcr.io/burkostya/archimate-ci-image` only.
+* Separate the Archi download release tag from the application version.
+* Run custom CLI commands with D-Bus and Xvfb, as report generation does.
+* Fix export links when HTML and other reports are in different directories.
+* Keep shell tracing disabled in GitHub Actions unless DEBUG is enabled.
+* Abort on CLI exceptions without opening a blocking Eclipse dialog.
+* Fail early when an export directory cannot be created or written.
+* Use a fully qualified destination when creating the Pages branch.
+
+### Added
+
+* Root and rootless integration tests with a fixed local coArchi model.
+* Pull request verification and a release workflow that publishes tested images.
+* Release version consistency checks and anonymous GHCR access checks.
+
+
 ## [5.7.0-1.0.6] - 2025-10-09
 
 ### Added
@@ -82,7 +103,8 @@ itself. For example `4.9.1-1.0.1`
 <!-- Links -->
 [Archi]: https://github.com/archimatetool/archi "Archi: ArchiMate Modelling Tool"
 <!-- Version compare links -->
-[Unreleased]: https://github.com/WoozyMasta/archimate-ci-image/compare/5.0.2-1.0.4...HEAD
+[Unreleased]: https://github.com/burkostya/archimate-ci-image/compare/5.10.0-1.0.7...HEAD
+[5.10.0-1.0.7]: https://github.com/burkostya/archimate-ci-image/compare/5.7.0-1.0.6...5.10.0-1.0.7
 [5.0.2-1.0.4]: https://github.com/WoozyMasta/archimate-ci-image/compare/4.9.2-1.0.3...5.0.2-1.0.4
 [4.9.2-1.0.3]: https://github.com/WoozyMasta/archimate-ci-image/compare/4.9.1-1.0.2...4.9.2-1.0.3
 [4.9.1-1.0.2]: https://github.com/WoozyMasta/archimate-ci-image/compare/4.9.1-1.0.1...4.9.1-1.0.2
